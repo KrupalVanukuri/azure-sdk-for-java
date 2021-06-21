@@ -490,7 +490,7 @@ SqlDatabase database = azure.sqlServers().databases().define("myNewDatabase")
   <tr>
     <td>App Platform</td>
     <td><ul style="list-style-type:circle">
-    <li><a href="https://github.com/azure/azure-sdk-for-java/blob/master/sdk/resourcemanager/azure-resourcemanager-samples/src/main/java/com/azure/resourcemanager/appplatform/samples/ManageSpringCloud.java">Manage Spring Cloud</a></li>
+    <li><a href="https://github.com/azure/azure-sdk-for-java/blob/main/sdk/resourcemanager/azure-resourcemanager-samples/src/main/java/com/azure/resourcemanager/appplatform/samples/ManageSpringCloud.java">Manage Spring Cloud</a></li>
   </tr>
 
 </table>
