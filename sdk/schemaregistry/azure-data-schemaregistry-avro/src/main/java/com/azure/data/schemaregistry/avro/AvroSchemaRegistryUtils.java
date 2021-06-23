@@ -13,6 +13,7 @@ import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
@@ -20,7 +21,9 @@ import org.apache.avro.specific.SpecificRecord;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Base Codec class for Avro encoder and decoder implementations
@@ -32,6 +35,7 @@ class AvroSchemaRegistryUtils {
     private static final Boolean AVRO_SPECIFIC_READER_DEFAULT = false;
 
     private final Boolean avroSpecificReader;
+    private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<>();
 
     /**
      * Instantiates AvroCodec instance
@@ -141,13 +145,42 @@ class AvroSchemaRegistryUtils {
      * @param writerSchema Avro schema fetched from schema registry store
      * @return correct Avro DatumReader object given encoder configuration
      */
-    private <T> DatumReader<T> getDatumReader(Schema writerSchema) {
+   private <T> DatumReader<T> getDatumReader(Schema writerSchema) {
         boolean writerSchemaIsPrimitive = AvroSchemaUtils.getPrimitiveSchemas().values().contains(writerSchema);
-        // do not use SpecificDatumReader if writerSchema is a primitive
-        if (avroSpecificReader && !writerSchemaIsPrimitive) {
-            return new SpecificDatumReader<>(writerSchema);
-        } else {
-            return new GenericDatumReader<>(writerSchema);
+        Schema readerSchema=getReaderSchema(writerSchema);
+        if(readerSchema !=null) {
+	        if (this.avroSpecificReader && !writerSchemaIsPrimitive) {
+	           return new SpecificDatumReader<>(writerSchema, readerSchema);
+	        }else {
+	        	return new GenericDatumReader<>(writerSchema, readerSchema);
+	        }
+        }else {
+        	if (this.avroSpecificReader && !writerSchemaIsPrimitive) {
+ 	           return new SpecificDatumReader<>(writerSchema);
+ 	        }else {
+ 	        	return new GenericDatumReader<>(writerSchema);
+ 	        }
         }
-    }
+      }
+    
+    private Schema getReaderSchema(Schema writerSchema) {
+    	Schema readerSchema = this.readerSchemaCache.get(writerSchema.getFullName());
+        if (readerSchema == null) {
+          Class<SpecificRecord> readerClass = SpecificData.get().getClass(writerSchema);
+          if (readerClass != null) {
+            try {
+              readerSchema = ((SpecificRecord)readerClass.newInstance()).getSchema();
+            } catch (InstantiationException |IllegalAccessException e) {
+            	 throw logger.logExceptionAsError(
+                         new IllegalStateException(writerSchema.getFullName() + " specified by the writers schema could not be instantiated to find the readers schema", e));
+            }
+            this.readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
+          } else {
+        	  throw logger.logExceptionAsError(
+                      new IllegalStateException("Could not find class " + writerSchema
+                .getFullName() + " specified in writer's schema whilst finding reader's schema for a SpecificRecord."));
+          } 
+        } 
+        return readerSchema;
+      }
 }
